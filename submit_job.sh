@@ -35,14 +35,14 @@ echo "CUDA available: $(python -c 'import torch; print(torch.cuda.is_available()
 echo "Data directory: $DATA_DIR"
 echo "=== Starting notebook execution at $(date) ==="
 
-# ── Execute the notebook ─────────────────────────────────────────────────────
-jupyter nbconvert \
-    --to notebook \
-    --execute \
-    --ExecutePreprocessor.timeout=7200 \
-    --ExecutePreprocessor.kernel_name=python3 \
-    --output ANNDL2526_Project_EXECUTED.ipynb \
-    ANNDL2526_Project_Template_vsc.ipynb
+# ── Execute the notebook with papermill (shows progress + cell output in log) ─
+papermill \
+    ANNDL2526_Project_Template_vsc.ipynb \
+    ANNDL2526_Project_EXECUTED.ipynb \
+    --log-output \
+    --progress-bar \
+    --request-save-on-cell-execute \
+    --execution-timeout 7200
 
 echo ""
 echo "=== Job finished at $(date) ==="
