@@ -107,12 +107,18 @@ for i, cell in enumerate(vsc_nb['cells']):
         source = source.replace('import matplotlib.pyplot as plt', 'import matplotlib\nmatplotlib.use("Agg")\nimport matplotlib.pyplot as plt')
 
     # ── Replace Data Paths ──────────────────────────────────────────
-    source = source.replace("input_dir = 'dataset'", "input_dir = '/scratch/leuven/375/vsc37509/ANNDL-PROJECT/dataset'")
-    source = source.replace('input_dir = "dataset"', 'input_dir = "/scratch/leuven/375/vsc37509/ANNDL-PROJECT/dataset"')
+    # User confirmed VOC path is in leuven-data (vsc-hard-mounts)
+    vsc_data_base = '/vsc-hard-mounts/leuven-data/375/vsc37509/ANNDL/data/VOCtrainval_11-May-2012_2'
+    source = source.replace("input_dir = 'dataset'", f"input_dir = '{vsc_data_base}'")
+    source = source.replace('input_dir = "dataset"', f'input_dir = "{vsc_data_base}"')
+    
     # Fix the VOC folder path that was hardcoded as Windows path in Classification/Segmentation
-    source = re.sub(r"path_to_extracted_folder\s*=\s*['\"]C:/.*?['\"]", "path_to_extracted_folder = '/scratch/leuven/375/vsc37509/ANNDL-PROJECT/dataset'", source)
+    source = re.sub(r"path_to_extracted_folder\s*=\s*['\"]C:/.*?['\"]", f"path_to_extracted_folder = '{vsc_data_base}'", source)
+    
     # Also catch general VOCdevkit paths just in case
-    source = re.sub(r"[A-Z]:/.*?/VOCdevkit/VOC2012", "/scratch/leuven/375/vsc37509/ANNDL-PROJECT/dataset/VOCdevkit/VOC2012", source)
+    source = re.sub(r"[A-Z]:/.*?/VOCdevkit/VOC2012", f"{vsc_data_base}/VOCdevkit/VOC2012", source)
+    source = source.replace("/scratch/leuven/375/vsc37509/ANNDL-PROJECT/dataset", vsc_data_base)
+    source = source.replace("/data/leuven/375/vsc37509/ANNDL-PROJECT/dataset", vsc_data_base)
 
     # ── Memory Optimization: img_size 224 (for V100 32GB) ────────────
     if i == 12:
