@@ -9,7 +9,23 @@
 #SBATCH --mem=32G
 #SBATCH --time=6:00:00
 #SBATCH --job-name=ANNDL_train
-#SBATCH --output=anndl_train_%j.log
+#SBATCH --output=%x_%j.log
+
+# ── All output goes to SCRATCH to avoid Home Quota issues ─────────────────────
+SCRATCH_OUT="$VSC_SCRATCH/anndl_output"
+mkdir -p "$SCRATCH_OUT"
+
+# Redirect all stdout/stderr to scratch log
+LOGFILE="$SCRATCH_OUT/anndl_train_${SLURM_JOB_ID}.log"
+exec > >(tee "$LOGFILE") 2>&1
+
+echo "========================================================================"
+echo "SLURM_JOB_ID: $SLURM_JOB_ID"
+echo "SLURM_NODELIST: $SLURM_NODELIST"
+echo "Date: $(date)"
+echo "Walltime: $SBATCH_TIMELIMIT"
+echo "Log file: $LOGFILE"
+echo "========================================================================"
 
 echo "=== Job started at $(date) ==="
 echo "Node: $(hostname)"
@@ -33,12 +49,13 @@ echo "Python: $(python --version)"
 echo "PyTorch: $(python -c 'import torch; print(torch.__version__)')"
 echo "CUDA available: $(python -c 'import torch; print(torch.cuda.is_available())')"
 echo "Data directory: $DATA_DIR"
+echo "Output directory: $SCRATCH_OUT"
 echo "=== Starting notebook execution at $(date) ==="
 
-# ── Execute the notebook with papermill (shows progress + cell output in log) ─
+# ── Execute notebook: output goes to SCRATCH ──────────────────────────────────
 papermill \
     ANNDL2526_Project_Template_vsc.ipynb \
-    ANNDL2526_Project_EXECUTED.ipynb \
+    "$SCRATCH_OUT/ANNDL2526_Project_EXECUTED.ipynb" \
     --log-output \
     --progress-bar \
     --request-save-on-cell-execute \
@@ -46,5 +63,7 @@ papermill \
 
 echo ""
 echo "=== Job finished at $(date) ==="
-echo "Executed notebook saved as: ANNDL2526_Project_EXECUTED.ipynb"
-echo "Download it with:  scp vsc37509@login.hpc.kuleuven.be:~/ANNDL-PROJECT/ANNDL2526_Project_EXECUTED.ipynb ."
+echo "Executed notebook saved to: $SCRATCH_OUT/ANNDL2526_Project_EXECUTED.ipynb"
+echo ""
+echo "To download, run locally:"
+echo "  scp vsc37509@login.hpc.kuleuven.be:$SCRATCH_OUT/ANNDL2526_Project_EXECUTED.ipynb ."
