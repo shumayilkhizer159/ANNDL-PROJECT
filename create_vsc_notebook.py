@@ -94,7 +94,7 @@ for i, cell in enumerate(vsc_nb['cells']):
 
     # ── Cell 4: Increase batch size + image sizes ────────────────────
     if '_BATCH_SIZE  = 8' in source:
-        source = source.replace('_BATCH_SIZE  = 8', '_BATCH_SIZE  = 64   # V100 32GB — matches original template')
+        source = source.replace('_BATCH_SIZE  = 8', '_BATCH_SIZE  = 32   # V100 32GB (64 OOMs at 224x224)')
         source = source.replace('_IMAGE_SHAPE = (128, 128)', '_IMAGE_SHAPE = (256, 256)  # V100 32GB (was 128 for 8GB GPU)')
         source = source.replace('IMG_SIZE     = 180', 'IMG_SIZE     = 224  # standard ImageNet size (was 180 for 8GB GPU)')
 
@@ -133,8 +133,8 @@ for i, cell in enumerate(vsc_nb['cells']):
         source = source.replace('DET_SIZE  = 160', 'DET_SIZE  = 320  # standard YOLO input (was 160 for 8GB GPU)')
 
     # ── Batch sizes in DataLoader calls ──────────────────────────────
-    source = re.sub(r'batch_size=8(?!_)', 'batch_size=64', source)
-    source = source.replace('batch_size=16', 'batch_size=64')
+    source = re.sub(r'batch_size=8(?!_)', 'batch_size=32', source)
+    source = source.replace('batch_size=16', 'batch_size=32')
 
     # ── ResNet V3 variant: also use 224 instead of 128 ───────────────
     # The v3 variant in cell 19 creates loaders with img_size=128
@@ -226,5 +226,5 @@ print("  IMG_SIZE:  180 → 224  (classification CNNs)")
 print("  XC_SIZE:   150 → 299  (Xception native)")
 print("  SEG_SIZE:  128 → 256  (segmentation U-Net)")
 print("  DET_SIZE:  160 → 320  (YOLO detection)")
-print("  Batch:     8   → 64   (V100 32GB — matches original template)")
+print("  Batch:     8   → 32   (V100 32GB — 64 OOMs at 224x224)")
 print("  XC_BATCH:  8   → 16   (Xception is big @ 299x299)")
