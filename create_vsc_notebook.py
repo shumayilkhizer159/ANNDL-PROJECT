@@ -63,6 +63,10 @@ def _cell_timer(cell_num):
 
 import gc as _gc
 import torch as _torch
+import json as _json
+
+_HISTORY_FILE = _os.path.join(_OUTPUT_DIR, 'history.json')
+
 def clear_gpu():
     _gc.collect()
     _torch.cuda.empty_cache()
@@ -70,6 +74,16 @@ def clear_gpu():
     _free, _total = _torch.cuda.mem_get_info()
     print(f"      🧹 GPU Memory Cleared: {_free/1024**3:.2f} GB free of {_total/1024**3:.2f} GB")
     import sys; sys.stdout.flush()
+
+def save_history(all_histories):
+    with open(_HISTORY_FILE, 'w') as f:
+        _json.dump(all_histories, f)
+
+def load_history():
+    if _os.path.exists(_HISTORY_FILE):
+        with open(_HISTORY_FILE, 'r') as f:
+            return _json.load(f)
+    return {}
 """
 
 modified_count = 0
@@ -156,26 +170,65 @@ for i, cell in enumerate(vsc_nb['cells']):
     source = re.sub(r"'(?![_/])([^']+?\.keras)'", r"_os.path.join(_OUTPUT_DIR, '\1')", source)
     source = re.sub(r"\"(?![_/])([^\"]+?\.keras)\"", r"_os.path.join(_OUTPUT_DIR, '\1')", source)
 
-    # ── Memory management: ensure clear_gpu() is called ───────────────
+    # ── Cell 18: Load saved history instead of resetting ──────────────
+    if i == 18:
+        source = source.replace('all_histories = {}', 'all_histories = load_history()')
+
+    # ── Cells with Fit logic: Inject Skip-If-Exists ──────────────────
     if i in [19, 22, 23, 32, 44]:
-        # Prepend clear_gpu() if not present
+        # Handle Cell 19 specially because it has 3 models
+        if i == 19:
+            for v in ['v1', 'v2', 'v3']:
+                m_path = f"_os.path.join(_OUTPUT_DIR, 'best_cnn_{v}.keras')"
+                
+                # Check for .fit() and wrap it
+                fit_block = f"hist_{v} = model_{v}.fit("
+                if fit_block in source:
+                    # Indent the fit call
+                    source = source.replace(
+                        fit_block,
+                        f"if not _os.path.exists({m_path}):\n    {fit_block}"
+                    )
+                    # Indent associated lines
+                    source = source.replace(f"all_histories['+ {v}'", f"    all_histories['+ {v}'")
+                    source = source.replace(f"model_{v}.evaluate(", f"    model_{v}.evaluate(")
+                    # Inject save_history after each update
+                    source = source.replace(f"all_histories['+ {v}'] = hist_{v}.history", f"all_histories['+ {v}'] = hist_{v}.history\n    save_history(all_histories)")
+                    
+                    # Add ELIF for loading
+                    source = source.replace(
+                        f"del model_{v}",
+                        f"else:\n    print(f'✅ Found {v}, skipping training...')\n    model_{v}.load_weights({m_path})\ndel model_{v}"
+                    )
+
+        # Handle single-model cells (22, 23, 32, 44)
+        else:
+            keras_match = re.search(r"(_os\.path\.join\(_OUTPUT_DIR, '([^']+?\.keras)'\))", source)
+            if keras_match:
+                full_path_code = keras_match.group(1)
+                
+                source = source.replace(
+                    "hist = model.fit(",
+                    f"if not _os.path.exists({full_path_code}):\n    hist = model.fit("
+                )
+                # Indent rest of training block
+                for line in ["all_histories[", "model.evaluate(", "save_history("]:
+                    source = source.replace(line, "    " + line)
+                
+                # Update history call to also save
+                source = re.sub(r"(all_histories\[[^\]]+\] = hist\.history)", r"\1\n    save_history(all_histories)", source)
+                
+                # Add else to load
+                source += f"\nelse:\n    print(f'✅ Skipping training: {full_path_code} exists')\n    model.load_weights({full_path_code})"
+
+        # Prepend clear_gpu() and timer
         if 'clear_gpu()' not in source:
             source = 'clear_gpu()\n' + source
-        # Append manual cleanup at the end of training cells
-        cleanup = """
-import gc, torch
-for _ in range(3):
-    gc.collect()
-    torch.cuda.empty_cache()
-clear_gpu()
-import sys; sys.stdout.flush()
-"""
+        
+        # Append manual cleanup
+        cleanup = "\nimport gc, torch\nfor _ in range(3): gc.collect(); torch.cuda.empty_cache()\nclear_gpu()\nimport sys; sys.stdout.flush()\n"
         if cleanup.strip() not in source:
             source += cleanup
-
-    # ── Flush after training cells ───────────────────────────────────
-    if i in [19, 22, 23, 32, 44] and 'sys.stdout.flush()' not in source:
-        source += '\nimport sys; sys.stdout.flush()'
 
     # Clear old outputs
     cell['outputs'] = []
