@@ -1,0 +1,33 @@
+# Model weights (large files)
+*.keras
+*.h5
+*.pt
+*.pth
+
+# Dataset (transferred separately)
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Helper/utility scripts (not needed on VSC)
+build_project_*.py
+fix_bug.py
+patch_*.py
+rebuild_notebook.py
+dump_cells.py
+analyze_notebook.py
+
+# Output files
+*.txt
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
