@@ -60,6 +60,16 @@ def _cell_timer(cell_num):
     hrs, mins = divmod(mins, 60)
     print(f"  ⏱  Total elapsed: {hrs}h {mins:02d}m {secs:02d}s")
     import sys; sys.stdout.flush()
+
+import gc as _gc
+import torch as _torch
+def clear_gpu():
+    _gc.collect()
+    _torch.cuda.empty_cache()
+    # Also print memory status to logs
+    _free, _total = _torch.cuda.mem_get_info()
+    print(f"      🧹 GPU Memory Cleared: {_free/1024**3:.2f} GB free of {_total/1024**3:.2f} GB")
+    import sys; sys.stdout.flush()
 """
 
 modified_count = 0
@@ -146,8 +156,25 @@ for i, cell in enumerate(vsc_nb['cells']):
     source = re.sub(r"'(?![_/])([^']+?\.keras)'", r"_os.path.join(_OUTPUT_DIR, '\1')", source)
     source = re.sub(r"\"(?![_/])([^\"]+?\.keras)\"", r"_os.path.join(_OUTPUT_DIR, '\1')", source)
 
-    # ── Flush after training cells ───────────────────────────────────
+    # ── Memory management: ensure clear_gpu() is called ───────────────
     if i in [19, 22, 23, 32, 44]:
+        # Prepend clear_gpu() if not present
+        if 'clear_gpu()' not in source:
+            source = 'clear_gpu()\n' + source
+        # Append manual cleanup at the end of training cells
+        cleanup = """
+import gc, torch
+for _ in range(3):
+    gc.collect()
+    torch.cuda.empty_cache()
+clear_gpu()
+import sys; sys.stdout.flush()
+"""
+        if cleanup.strip() not in source:
+            source += cleanup
+
+    # ── Flush after training cells ───────────────────────────────────
+    if i in [19, 22, 23, 32, 44] and 'sys.stdout.flush()' not in source:
         source += '\nimport sys; sys.stdout.flush()'
 
     # Clear old outputs
