@@ -109,6 +109,10 @@ for i, cell in enumerate(vsc_nb['cells']):
     # ── Replace Data Paths ──────────────────────────────────────────
     source = source.replace("input_dir = 'dataset'", "input_dir = '/data/leuven/375/vsc37509/ANNDL-PROJECT/dataset'")
     source = source.replace('input_dir = "dataset"', 'input_dir = "/data/leuven/375/vsc37509/ANNDL-PROJECT/dataset"')
+    # Fix the VOC folder path that was hardcoded as Windows path in Classification/Segmentation
+    source = re.sub(r"path_to_extracted_folder\s*=\s*['\"]C:/.*?['\"]", "path_to_extracted_folder = '/data/leuven/375/vsc37509/ANNDL-PROJECT/dataset'", source)
+    # Also catch general VOCdevkit paths just in case
+    source = re.sub(r"[A-Z]:/.*?/VOCdevkit/VOC2012", "/data/leuven/375/vsc37509/ANNDL-PROJECT/dataset/VOCdevkit/VOC2012", source)
 
     # ── Memory Optimization: img_size 224 (for V100 32GB) ────────────
     if i == 12:
