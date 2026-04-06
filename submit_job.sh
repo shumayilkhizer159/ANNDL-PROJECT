@@ -38,6 +38,7 @@ conda activate anndl
 # ── Set Keras to use PyTorch backend ──────────────────────────────────────────
 export KERAS_BACKEND=torch
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export KERAS_HOME="$VSC_SCRATCH/.keras"      # pretrained weights go to Scratch, not Home
 
 # ── Set data path (the notebook reads this) ───────────────────────────────────
 export DATA_DIR="$VSC_DATA/ANNDL/data/VOCtrainval_11-May-2012_2"
