@@ -63,6 +63,11 @@ for i, cell in enumerate(nb['cells']):
     if '_IMAGE_SHAPE = (128, 128)' in source and 'was' not in source:
         errors.append(f"Cell {i}: _IMAGE_SHAPE still (128, 128)")
 
+    # Check for relative model paths (should use _OUTPUT_DIR)
+    if '.keras' in source and '_OUTPUT_DIR' not in source:
+        if 'import ' not in source and 'def ' not in source: # skip definitions
+             errors.append(f"Cell {i}: Saving model to relative path (needs _OUTPUT_DIR)")
+
     # Check shape mismatches - model input vs data
     # Models use IMG_SIZE variable, so check that it's consistent
     if 'shape=(3, 128, 128)' in source and 'build_unet' not in source:

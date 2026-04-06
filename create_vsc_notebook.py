@@ -12,7 +12,7 @@ vsc_nb = copy.deepcopy(nb)
 
 # Progress markers
 progress_markers = {
-    2:  'print("\\n" + "="*80 + "\\n  [CELL 2/47] GPU Setup\\n" + "="*80)',
+    2:  'print("\\n" + "="*80 + "\\n  [CELL 2/47] GPU Setup & Paths\\n" + "="*80)',
     3:  'print("\\n  [CELL 3/47] Importing libraries...")',
     4:  'print("\\n  [CELL 4/47] Setting constants...")',
     6:  'print("\\n  [CELL 6/47] Setting data path...")',
@@ -45,7 +45,14 @@ progress_markers = {
 }
 
 timer_code = """import time as _time
+import os as _os
 _global_start = _time.time()
+
+# Setup Scratch Output Directory to avoid Disk Quota issues
+_SCRATCH_DIR = _os.environ.get('VSC_SCRATCH', _os.path.expanduser('~'))
+_OUTPUT_DIR = _os.path.join(_SCRATCH_DIR, 'anndl_models')
+_os.makedirs(_OUTPUT_DIR, exist_ok=True)
+print(f"  📂 Saving models to: {_OUTPUT_DIR}")
 
 def _cell_timer(cell_num):
     elapsed = _time.time() - _global_start
@@ -132,6 +139,12 @@ for i, cell in enumerate(vsc_nb['cells']):
         marker = progress_markers[i]
         timer_call = f"_cell_timer({i})"
         source = marker + '\n' + timer_call + '\n' + source
+
+    # ── Redirect model saves to Scratch Output Directory ────────────
+    # Find things like 'best_cnn_v1.keras' and replace with _os.path.join(_OUTPUT_DIR, 'best_cnn_v1.keras')
+    # Use (?<![_/]) to avoid double-processing already absolute paths
+    source = re.sub(r"'(?![_/])([^']+?\.keras)'", r"_os.path.join(_OUTPUT_DIR, '\1')", source)
+    source = re.sub(r"\"(?![_/])([^\"]+?\.keras)\"", r"_os.path.join(_OUTPUT_DIR, '\1')", source)
 
     # ── Flush after training cells ───────────────────────────────────
     if i in [19, 22, 23, 32, 44]:
