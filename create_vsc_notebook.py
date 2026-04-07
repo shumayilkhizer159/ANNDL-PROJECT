@@ -140,6 +140,15 @@ for i, cell in enumerate(vsc_nb['cells']):
     # Using regex to more reliably catch (3, 128, 128), (3, 150, 150), and (3, 180, 180)
     source = re.sub(r'shape=\(3, (128|150|180|XC_SIZE|SEG_SIZE|DET_SIZE), (128|150|180|XC_SIZE|SEG_SIZE|DET_SIZE)\)', 'shape=(3, 224, 224)', source)
 
+    # ── Channel Ordering Fix: Force Channels First for Torch ──────────
+    # PyTorch backend expects (3, H, W). Some models like Xception have hardcoded (H, W, 3)
+    source = source.replace('input_shape=(XC_SIZE, XC_SIZE, 3)', 'input_shape=(3, XC_SIZE, XC_SIZE)')
+    source = source.replace('input_shape=(DET_SIZE, DET_SIZE, 3)', 'input_shape=(3, DET_SIZE, DET_SIZE)')
+    source = source.replace('input_shape=(SEG_SIZE, SEG_SIZE, 3)', 'input_shape=(3, SEG_SIZE, SEG_SIZE)')
+    
+    # Remove manual permutations in specialized data loaders like VOCDatasetCL
+    source = source.replace('t   = t.permute(1, 2, 0)            # → HWC', '# t.permute(1, 2, 0) removed for Torch backend')
+
     # ── Add progress markers ─────────────────────────────────────────
     if i in progress_markers:
         marker = progress_markers[i]
