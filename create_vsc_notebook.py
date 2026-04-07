@@ -121,18 +121,23 @@ for i, cell in enumerate(vsc_nb['cells']):
     source = source.replace("/data/leuven/375/vsc37509/ANNDL-PROJECT/dataset", vsc_data_base)
     
     # ── Memory Optimization: Unified img_size 224 (for A100/V100 32GB) ────────
-    # Force global IMG_SIZE to 224
+    # Force all size variables to be consistent
     source = source.replace('IMG_SIZE     = 180', 'IMG_SIZE     = 224')
+    source = source.replace('XC_SIZE = 150', 'XC_SIZE = 224')
+    source = source.replace('SEG_SIZE = 128', 'SEG_SIZE = 224')
+    source = source.replace('DET_SIZE = 128', 'DET_SIZE = 224')
     
-    # Force data loaders to match
+    # Force data loaders to match (global replace)
     source = source.replace('img_size=128', 'img_size=224')
     source = source.replace('img_size=180', 'img_size=224')
+    source = source.replace('img_size=150', 'img_size=224')
+    source = source.replace('img_size=DET_SIZE', 'img_size=224')
+    source = source.replace('img_size=XC_SIZE', 'img_size=224')
+    source = source.replace('img_size=SEG_SIZE', 'img_size=224')
 
-    # Force ResNet shape to match
-    if "shape=(3, 128, 128)" in source and "build_resnet_v3" in source:
-        source = source.replace("shape=(3, 128, 128)", "shape=(3, 224, 224)")
-    if "shape=(3, 180, 180)" in source and "build_resnet_v3" in source:
-        source = source.replace("shape=(3, 180, 180)", "shape=(3, 224, 224)")
+    # Force model input shapes to match (global replace for common hardcoded sizes)
+    # Using regex to more reliably catch (3, 128, 128), (3, 150, 150), and (3, 180, 180)
+    source = re.sub(r'shape=\(3, (128|150|180|XC_SIZE|SEG_SIZE|DET_SIZE), (128|150|180|XC_SIZE|SEG_SIZE|DET_SIZE)\)', 'shape=(3, 224, 224)', source)
 
     # ── Add progress markers ─────────────────────────────────────────
     if i in progress_markers:
