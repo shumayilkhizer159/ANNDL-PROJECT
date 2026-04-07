@@ -141,12 +141,14 @@ for i, cell in enumerate(vsc_nb['cells']):
     source = re.sub(r'shape=\(3, (128|150|180|XC_SIZE|SEG_SIZE|DET_SIZE), (128|150|180|XC_SIZE|SEG_SIZE|DET_SIZE)\)', 'shape=(3, 224, 224)', source)
 
     # ── Channel Ordering Fix: Force Channels First for Torch ──────────
-    # PyTorch backend expects (3, H, W). Some models have hardcoded (H, W, 3)
-    source = source.replace('input_shape=(XC_SIZE, XC_SIZE, 3)', 'input_shape=(3, XC_SIZE, XC_SIZE)')
-    source = source.replace('shape=(XC_SIZE, XC_SIZE, 3)', 'shape=(3, XC_SIZE, XC_SIZE)')
-    source = source.replace('input_shape=(DET_SIZE, DET_SIZE, 3)', 'input_shape=(3, DET_SIZE, DET_SIZE)')
+    # PyTorch backend expects (3, H, W). 
+    # NOTE: keras.applications (like Xception) strictly require (H, W, 3) in the constructor 
+    # to pass internal ImageNet shape checks, but then handle the backend conversion.
+    source = source.replace('input_shape=(XC_SIZE, XC_SIZE, 3)', 'input_shape=(XC_SIZE, XC_SIZE, 3)') # Stay HWC for constructor
+    source = source.replace('shape=(XC_SIZE, XC_SIZE, 3)', 'shape=(3, XC_SIZE, XC_SIZE)') # Our heads stay CHW
+    source = source.replace('input_shape=(DET_SIZE, DET_SIZE, 3)', 'input_shape=(DET_SIZE, DET_SIZE, 3)')
     source = source.replace('shape=(DET_SIZE, DET_SIZE, 3)', 'shape=(3, DET_SIZE, DET_SIZE)')
-    source = source.replace('input_shape=(SEG_SIZE, SEG_SIZE, 3)', 'input_shape=(3, SEG_SIZE, SEG_SIZE)')
+    source = source.replace('input_shape=(SEG_SIZE, SEG_SIZE, 3)', 'input_shape=(SEG_SIZE, SEG_SIZE, 3)')
     source = source.replace('shape=(SEG_SIZE, SEG_SIZE, 3)', 'shape=(3, SEG_SIZE, SEG_SIZE)')
     
     # Remove manual permutations in specialized data loaders like VOCDatasetCL
