@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --account=lp_h_ecoom_uhasselt
-#SBATCH --cluster=genius
-#SBATCH --partition=gpu_v100
+#SBATCH --cluster=wice
+#SBATCH --partition=gpu_a100
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=16
 #SBATCH --gpus-per-node=1
 #SBATCH --mem=32G
-#SBATCH --time=6:00:00
+#SBATCH --time=24:00:00
 #SBATCH --job-name=ANNDL_train
 #SBATCH --output=%x_%j.log
 
@@ -41,7 +41,7 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export KERAS_HOME="$VSC_SCRATCH/.keras"      # pretrained weights go to Scratch, not Home
 
 # ── Set data path (the notebook reads this) ───────────────────────────────────
-export DATA_DIR="$VSC_DATA/ANNDL/data/VOCtrainval_11-May-2012_2"
+export DATA_DIR="/vsc-hard-mounts/leuven-data/375/vsc37509/ANNDL/data/VOCtrainval_11-May-2012_2"
 
 # ── Navigate to project ──────────────────────────────────────────────────────
 cd "$HOME/ANNDL-PROJECT"
