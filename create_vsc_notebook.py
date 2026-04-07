@@ -76,13 +76,14 @@ def load_history():
     return {}
 
 def train_model_vsc(model, model_path, train_loader, val_loader, epochs, history_key, all_histories):
-    if _os.path.exists(model_path):
+    if model_path is not None and _os.path.exists(model_path):
         print(f"✅ Skipping training: {model_path} already exists. Loading weights...")
         model.load_weights(model_path)
     else:
         print(f"🚀 Training '{history_key}'...")
-        # Note: make_callbacks is assumed to be defined in your notebook
-        hist = model.fit(train_loader, validation_data=val_loader, epochs=epochs, callbacks=make_callbacks(model_path))
+        # Only use callbacks if a save path is provided
+        cb = make_callbacks(model_path) if model_path is not None else []
+        hist = model.fit(train_loader, validation_data=val_loader, epochs=epochs, callbacks=cb)
         all_histories[history_key] = hist.history
         save_history(all_histories)
     
