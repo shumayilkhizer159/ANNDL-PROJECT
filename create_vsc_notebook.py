@@ -187,6 +187,10 @@ for i, cell in enumerate(vsc_nb['cells']):
                 else:
                     line_end = len(source)
 
+                # Capture leading whitespace for indentation
+                line_text = source[line_start:line_end]
+                indent = line_text[:len(line_text) - len(line_text.lstrip())]
+                
                 # Determine model name and model path
                 model_match = re.search(r"(\w+)\.fit\(", source)
                 m_var = model_match.group(1) if model_match else "model"
@@ -196,9 +200,15 @@ for i, cell in enumerate(vsc_nb['cells']):
                 
                 # Determine history key
                 key_match = re.search(r"all_histories\[([^\]]+)\]", source)
-                h_key_code = key_match.group(1) if key_match else "unknown"
+                # If not found, use a fallback for loop models
+                if key_match:
+                    h_key_code = key_match.group(1)
+                elif 'name' in source and 'dropout' in source:
+                    h_key_code = 'name' # used in Model 2 loop
+                else:
+                    h_key_code = f"'{m_var}'" # fallback
                 
-                repl = f"train_model_vsc({m_var}, {m_path_code}, train_loader, val_loader, 20, {h_key_code}, all_histories)"
+                repl = f"{indent}train_model_vsc({m_var}, {m_path_code}, train_loader, val_loader, 20, {h_key_code}, all_histories)"
                 source = source[:line_start] + repl + source[line_end:]
 
         # Prepend clear_gpu()
