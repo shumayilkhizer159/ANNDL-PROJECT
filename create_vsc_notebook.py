@@ -140,8 +140,8 @@ for i, cell in enumerate(vsc_nb['cells']):
     source = re.sub(r'(?:input_)?shape\s*=\s*\(\s*(?:\d+|[A-Z_]+)\s*,\s*(?:\d+|[A-Z_]+)\s*,\s*3\s*\)', 'shape=(3, 224, 224)', source)
     source = re.sub(r'(?:input_)?shape\s*=\s*\(\s*3\s*,\s*(?:\d+|[A-Z_]+)\s*,\s*(?:\d+|[A-Z_]+)\s*\)', 'shape=(3, 224, 224)', source)
     
-    # Fix the keras.applications.Xception constructor specifically so it doesn't crash on ImageNet check
-    source = re.sub(r'(keras\.applications\.Xception\([\s\S]*?)(shape=\(3, 224, 224\))([\s\S]*?\))', r'\1input_shape=(224, 224, 3)\3', source)
+    # Fix the Xception constructor specifically so it doesn't crash on ImageNet check
+    source = re.sub(r'(Xception\([\s\S]*?)(shape=\(3, 224, 224\))([\s\S]*?\))', r'\1input_shape=(224, 224, 3)\3', source)
     
     # 4. Remove ALL permute(1, 2, 0) manual channel swaps
     source = re.sub(r't\s*=\s*t\.permute\(1,\s*2,\s*0\).*', '# permute removed for Torch channels-first backend', source)
