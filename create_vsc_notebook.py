@@ -126,7 +126,7 @@ for i, cell in enumerate(vsc_nb['cells']):
     source = source.replace('IMG_SIZE     = 180', 'IMG_SIZE     = 224')
     source = source.replace('XC_SIZE = 150', 'XC_SIZE = 224')
     source = source.replace('SEG_SIZE = 128', 'SEG_SIZE = 224')
-    source = source.replace('DET_SIZE = 128', 'DET_SIZE = 224')
+    source = re.sub(r'DET_SIZE\s*=\s*\d+', 'DET_SIZE = 224', source)
     
     # Force data loaders to match (global replace)
     source = source.replace('img_size=128', 'img_size=224')
