@@ -60,7 +60,7 @@ papermill \
     --log-output \
     --progress-bar \
     --request-save-on-cell-execute \
-    --execution-timeout 7200
+    --execution-timeout 36000
 
 echo ""
 echo "=== Job finished at $(date) ==="
