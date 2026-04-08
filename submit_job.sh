@@ -40,8 +40,10 @@ export KERAS_BACKEND=torch
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export KERAS_HOME="$VSC_SCRATCH/.keras"      # pretrained weights go to Scratch, not Home
 
-# ── Set data path (the notebook reads this) ───────────────────────────────────
-export DATA_DIR="/vsc-hard-mounts/leuven-data/375/vsc37509/ANNDL/data/VOCtrainval_11-May-2012_2"
+# ── Cache Dataset to Node's Local NVMe SSD for Blazing Fast I/O ─────────────
+echo "=== Copying dataset to local node SSD ($TMPDIR) ==="
+rsync -a "/vsc-hard-mounts/leuven-data/375/vsc37509/ANNDL/data/VOCtrainval_11-May-2012_2" "$TMPDIR/"
+export DATA_DIR="$TMPDIR/VOCtrainval_11-May-2012_2"
 
 # ── Navigate to project ──────────────────────────────────────────────────────
 cd "$HOME/ANNDL-PROJECT"

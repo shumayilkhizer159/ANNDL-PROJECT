@@ -94,7 +94,7 @@ def train_model_vsc(model, model_path, train_loader, val_loader, epochs, history
 """
 
 modified_count = 0
-vsc_data_base = '/vsc-hard-mounts/leuven-data/375/vsc37509/ANNDL/data/VOCtrainval_11-May-2012_2'
+vsc_data_base_code = "_os.environ.get('DATA_DIR', '/vsc-hard-mounts/leuven-data/375/vsc37509/ANNDL/data/VOCtrainval_11-May-2012_2')"
 
 for i, cell in enumerate(vsc_nb['cells']):
     if cell['cell_type'] != 'code':
@@ -109,9 +109,9 @@ for i, cell in enumerate(vsc_nb['cells']):
         source = source.replace('import matplotlib.pyplot as plt', 'import matplotlib\nmatplotlib.use("Agg")\nimport matplotlib.pyplot as plt')
 
     # Path Normalization
-    source = re.sub(r"input_dir\s*=\s*['\"].*?['\"]", f"input_dir = '{vsc_data_base}'", source)
-    source = re.sub(r"path_to_extracted_folder\s*=\s*['\"].*?['\"]", f"path_to_extracted_folder = '{vsc_data_base}'", source)
-    source = re.sub(r"[A-Z]:/.*?/VOCdevkit/VOC2012", f"{vsc_data_base}/VOCdevkit/VOC2012", source)
+    source = re.sub(r"input_dir\s*=\s*['\"].*?['\"]", f"input_dir = {vsc_data_base_code}", source)
+    source = re.sub(r"path_to_extracted_folder\s*=\s*['\"].*?['\"]", f"path_to_extracted_folder = {vsc_data_base_code}", source)
+    source = re.sub(r"['\"][A-Z]:/.*?/VOCdevkit/VOC2012['\"]", f"f\"{{{vsc_data_base_code}}}/VOCdevkit/VOC2012\"", source)
     
     # =========================================================================
     # UNIVERSAL SHAPE & CHANNEL NORMALIZATION
@@ -125,11 +125,9 @@ for i, cell in enumerate(vsc_nb['cells']):
     # 2. Force img_size keywords to 224
     source = re.sub(r'img_size\s*=\s*(128|150|160|180|IMG_SIZE|XC_SIZE|SEG_SIZE|DET_SIZE)', 'img_size=224', source)
     
-    # 2.5 I/O Optimization: Massive speedup for Network Drives (NFS)
-    # The template uses num_workers=0 for local windows, which causes agonizing I/O starvation on clusters.
-    source = source.replace('num_workers=0', 'num_workers=16, pin_memory=True')
-    # Clean up duplicate pin_memory if the template already had it
-    source = re.sub(r'pin_memory=True\s*,\s*pin_memory=True', 'pin_memory=True', source)
+    # 2.5 I/O Optimization Reverted: PyTorch multiprocessing inside Papermill causes a Fork Bomb
+    # We will solve I/O by copying data to $TMPDIR inside submit_job.sh instead.
+    # source = source.replace('num_workers=0', 'num_workers=16, pin_memory=True')
     
     # 3. Universal shape replacement to (3, 224, 224) 
     # Match any shape=(X, Y, Z) or input_shape=(X, Y, Z)
