@@ -128,6 +128,8 @@ for i, cell in enumerate(vsc_nb['cells']):
     # 2.5 I/O Optimization: Massive speedup for Network Drives (NFS)
     # The template uses num_workers=0 for local windows, which causes agonizing I/O starvation on clusters.
     source = source.replace('num_workers=0', 'num_workers=16, pin_memory=True')
+    # Clean up duplicate pin_memory if the template already had it
+    source = re.sub(r'pin_memory=True\s*,\s*pin_memory=True', 'pin_memory=True', source)
     
     # 3. Universal shape replacement to (3, 224, 224) 
     # Match any shape=(X, Y, Z) or input_shape=(X, Y, Z)
