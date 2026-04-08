@@ -125,6 +125,10 @@ for i, cell in enumerate(vsc_nb['cells']):
     # 2. Force img_size keywords to 224
     source = re.sub(r'img_size\s*=\s*(128|150|160|180|IMG_SIZE|XC_SIZE|SEG_SIZE|DET_SIZE)', 'img_size=224', source)
     
+    # 2.5 I/O Optimization: Massive speedup for Network Drives (NFS)
+    # The template uses num_workers=0 for local windows, which causes agonizing I/O starvation on clusters.
+    source = source.replace('num_workers=0', 'num_workers=16, pin_memory=True')
+    
     # 3. Universal shape replacement to (3, 224, 224) 
     # Match any shape=(X, Y, Z) or input_shape=(X, Y, Z)
     # Exclude the exact constructor for `keras.applications.Xception` if we can, 
