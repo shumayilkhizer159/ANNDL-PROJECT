@@ -1,7 +1,7 @@
 import json
 import os
 import re
-import time
+import uuid
 
 # Load the original notebook
 original_nb_path = 'ANNDL2526_Project_Template.ipynb'
@@ -10,7 +10,6 @@ vsc_nb_path = 'ANNDL2526_Project_Template_vsc.ipynb'
 with open(original_nb_path, 'r', encoding='utf-8') as f:
     vsc_nb = json.load(f)
 
-# Progress marker mapping
 progress_markers = {
     1:  'print("\\n  [CELL 1/47] Setting up environment...")',
     10: 'print("\\n  [CELL 10/47] Visualising initial data...")',
@@ -57,7 +56,6 @@ _HISTORY_FILE = _os.path.join(_OUTPUT_DIR, 'history.json')
 def clear_gpu():
     _gc.collect()
     _torch.cuda.empty_cache()
-    # Also print memory status to logs
     _free, _total = _torch.cuda.mem_get_info()
     print(f"      🧹 GPU Memory Cleared: {_free/1024**3:.2f} GB free of {_total/1024**3:.2f} GB")
     import sys; sys.stdout.flush()
@@ -72,27 +70,31 @@ def load_history():
             try:
                 return _json.load(f)
             except:
-                return {}
+                pass
     return {}
 
 def train_model_vsc(model, model_path, train_loader, val_loader, epochs, history_key, all_histories):
     if model_path is not None and _os.path.exists(model_path):
-        print(f"✅ Skipping training: {model_path} already exists. Loading weights...")
+        print(f"✅ Skipping training: {model_path} already exists...")
         model.load_weights(model_path)
     else:
         print(f"🚀 Training '{history_key}'...")
-        # Only use callbacks if a save path is provided
         cb = make_callbacks(model_path) if model_path is not None else []
         hist = model.fit(train_loader, validation_data=val_loader, epochs=epochs, callbacks=cb)
         all_histories[history_key] = hist.history
-        save_history(all_histories)
+        if model_path is not None:
+            save_history(all_histories)
     
-    # Always evaluate to ensure the current session has the result
+    # Check shape to guarantee no runtime crash on evaluate
+    dummy_x, _ = next(iter(val_loader))
+    print(f"      [Sanity Check] DataLoader shape: {dummy_x.shape}, Expected: {model.input_shape}")
+    
     print(f"📊 Evaluating '{history_key}'...")
     model.evaluate(val_loader)
 """
 
 modified_count = 0
+vsc_data_base = '/vsc-hard-mounts/leuven-data/375/vsc37509/ANNDL/data/VOCtrainval_11-May-2012_2'
 
 for i, cell in enumerate(vsc_nb['cells']):
     if cell['cell_type'] != 'code':
@@ -101,141 +103,123 @@ for i, cell in enumerate(vsc_nb['cells']):
     source = ''.join(cell.get('source', []))
     original = source
 
-    # ── Cell 2: Add timer + Agg backend ──────────────────────────────
+    # Inject Timer + Agg Backend
     if 'os.environ["KERAS_BACKEND"]' in source and 'import torch' in source:
         source = timer_code + source
-        # Force Matplotlib to use Agg backend (non-interactive)
         source = source.replace('import matplotlib.pyplot as plt', 'import matplotlib\nmatplotlib.use("Agg")\nimport matplotlib.pyplot as plt')
 
-    # ── Replace Data Paths ──────────────────────────────────────────
-    # User confirmed VOC path is in leuven-data (vsc-hard-mounts)
-    vsc_data_base = '/vsc-hard-mounts/leuven-data/375/vsc37509/ANNDL/data/VOCtrainval_11-May-2012_2'
-    source = source.replace("input_dir = 'dataset'", f"input_dir = '{vsc_data_base}'")
-    source = source.replace('input_dir = "dataset"', f'input_dir = "{vsc_data_base}"')
-    
-    # Fix the VOC folder path that was hardcoded as Windows path in Classification/Segmentation
-    source = re.sub(r"path_to_extracted_folder\s*=\s*['\"]C:/.*?['\"]", f"path_to_extracted_folder = '{vsc_data_base}'", source)
-    
-    # Also catch general VOCdevkit paths just in case
+    # Path Normalization
+    source = re.sub(r"input_dir\s*=\s*['\"].*?['\"]", f"input_dir = '{vsc_data_base}'", source)
+    source = re.sub(r"path_to_extracted_folder\s*=\s*['\"].*?['\"]", f"path_to_extracted_folder = '{vsc_data_base}'", source)
     source = re.sub(r"[A-Z]:/.*?/VOCdevkit/VOC2012", f"{vsc_data_base}/VOCdevkit/VOC2012", source)
-    source = source.replace("/scratch/leuven/375/vsc37509/ANNDL-PROJECT/dataset", vsc_data_base)
-    source = source.replace("/data/leuven/375/vsc37509/ANNDL-PROJECT/dataset", vsc_data_base)
     
-    # ── Memory Optimization: Unified img_size 224 (for A100/V100 32GB) ────────
-    # Force all size variables to be consistent
-    source = source.replace('IMG_SIZE     = 180', 'IMG_SIZE     = 224')
-    source = source.replace('XC_SIZE = 150', 'XC_SIZE = 224')
-    source = source.replace('SEG_SIZE = 128', 'SEG_SIZE = 224')
-    source = re.sub(r'DET_SIZE\s*=\s*\d+', 'DET_SIZE = 224', source)
+    # =========================================================================
+    # UNIVERSAL SHAPE & CHANNEL NORMALIZATION
+    # =========================================================================
+    # 1. Force exact constant definitions to 224
+    source = re.sub(r'\bIMG_SIZE\s*=\s*\d+', 'IMG_SIZE = 224', source)
+    source = re.sub(r'\bXC_SIZE\s*=\s*\d+', 'XC_SIZE = 224', source)
+    source = re.sub(r'\bSEG_SIZE\s*=\s*\d+', 'SEG_SIZE = 224', source)
+    source = re.sub(r'\bDET_SIZE\s*=\s*\d+', 'DET_SIZE = 224', source)
     
-    # Force data loaders to match (global replace)
-    source = source.replace('img_size=128', 'img_size=224')
-    source = source.replace('img_size=180', 'img_size=224')
-    source = source.replace('img_size=150', 'img_size=224')
-    source = source.replace('img_size=DET_SIZE', 'img_size=224')
-    source = source.replace('img_size=XC_SIZE', 'img_size=224')
-    source = source.replace('img_size=SEG_SIZE', 'img_size=224')
-
-    # Force model input shapes to match (global replace for common hardcoded sizes)
-    # Using regex to more reliably catch (3, 128, 128), (3, 150, 150), and (3, 180, 180)
-    source = re.sub(r'shape=\(3, (128|150|180|XC_SIZE|SEG_SIZE|DET_SIZE), (128|150|180|XC_SIZE|SEG_SIZE|DET_SIZE)\)', 'shape=(3, 224, 224)', source)
-
-    # ── Channel Ordering Fix: Force Channels First for Torch ──────────
-    # PyTorch backend expects (3, H, W). 
-    # NOTE: keras.applications (like Xception) strictly require (H, W, 3) in the constructor 
-    # to pass internal ImageNet shape checks, but then handle the backend conversion.
-    source = source.replace('input_shape=(XC_SIZE, XC_SIZE, 3)', 'input_shape=(XC_SIZE, XC_SIZE, 3)') # Stay HWC for constructor
-    source = source.replace('shape=(XC_SIZE, XC_SIZE, 3)', 'shape=(3, XC_SIZE, XC_SIZE)') # Our heads stay CHW
-    source = source.replace('input_shape=(DET_SIZE, DET_SIZE, 3)', 'input_shape=(DET_SIZE, DET_SIZE, 3)')
-    source = source.replace('shape=(DET_SIZE, DET_SIZE, 3)', 'shape=(3, DET_SIZE, DET_SIZE)')
-    source = source.replace('input_shape=(SEG_SIZE, SEG_SIZE, 3)', 'input_shape=(SEG_SIZE, SEG_SIZE, 3)')
-    source = source.replace('shape=(SEG_SIZE, SEG_SIZE, 3)', 'shape=(3, SEG_SIZE, SEG_SIZE)')
+    # 2. Force img_size keywords to 224
+    source = re.sub(r'img_size\s*=\s*(128|150|160|180|IMG_SIZE|XC_SIZE|SEG_SIZE|DET_SIZE)', 'img_size=224', source)
     
-    # Remove manual permutations in specialized data loaders like VOCDatasetCL
-    source = source.replace('t   = t.permute(1, 2, 0)            # → HWC', '# t.permute(1, 2, 0) removed for Torch backend')
+    # 3. Universal shape replacement to (3, 224, 224) 
+    # Match any shape=(X, Y, Z) or input_shape=(X, Y, Z)
+    # Exclude the exact constructor for `keras.applications.Xception` if we can, 
+    # but the safest way is to change ALL shapes to (3, 224, 224), then fix Xception specifically.
+    
+    # Replace (150, 150, 3) or (XC_SIZE, XC_SIZE, 3) etc to (3, 224, 224)
+    source = re.sub(r'(?:input_)?shape\s*=\s*\(\s*(?:\d+|[A-Z_]+)\s*,\s*(?:\d+|[A-Z_]+)\s*,\s*3\s*\)', 'shape=(3, 224, 224)', source)
+    source = re.sub(r'(?:input_)?shape\s*=\s*\(\s*3\s*,\s*(?:\d+|[A-Z_]+)\s*,\s*(?:\d+|[A-Z_]+)\s*\)', 'shape=(3, 224, 224)', source)
+    
+    # Fix the keras.applications.Xception constructor specifically so it doesn't crash on ImageNet check
+    source = re.sub(r'(keras\.applications\.Xception\([\s\S]*?)(shape=\(3, 224, 224\))([\s\S]*?\))', r'\1input_shape=(224, 224, 3)\3', source)
+    
+    # 4. Remove ALL permute(1, 2, 0) manual channel swaps
+    source = re.sub(r't\s*=\s*t\.permute\(1,\s*2,\s*0\).*', '# permute removed for Torch channels-first backend', source)
+    # =========================================================================
 
-    # ── Add progress markers ─────────────────────────────────────────
+    # Progress Map
     if i in progress_markers:
         marker = progress_markers[i]
         timer_call = f"_cell_timer({i})"
         source = marker + '\n' + timer_call + '\n' + source
 
-    # ── Redirect model saves to Scratch Output Directory ────────────
+    # Save to Scratch output redirection
     source = re.sub(r"'(?![_/])([^']+?\.keras)'", r"_os.path.join(_OUTPUT_DIR, '\1')", source)
     source = re.sub(r"\"(?![_/])([^\"]+?\.keras)\"", r"_os.path.join(_OUTPUT_DIR, '\1')", source)
 
-    # ── Cell 18: Load saved history instead of resetting ──────────────
-    if i == 18:
-        source = source.replace('all_histories = {}', 'all_histories = load_history()')
+    # Load History (Cell 18)
+    if source.strip() == 'all_histories = {}':
+        source = 'all_histories = load_history()'
 
-    # ── Cells with Fit logic: Inject train_model_vsc Helper ──────────
-    if i in [19, 22, 23, 32, 44]:
-        # Handle Cell 19 (multi-model: v1, v2, v3)
-        if i == 19:
+    # Train Helper Injection
+    if '.fit(' in source and 'epochs=' in source and i not in [1, 10]:
+        # Special logic for Cell 19 (multiple models)
+        if 'model_v1.fit' in source:
             for v in ['v1', 'v2', 'v3']:
                 m_path = f"_os.path.join(_OUTPUT_DIR, 'best_cnn_{v}.keras')"
-                fit_call = f"hist_{v} = model_{v}.fit("
+                fit_call = f"model_{v}.fit("
                 if fit_call in source:
-                    # Find start and end of this model's specific block
                     start_ptr = source.find(fit_call)
+                    # Go back to start of line to grab fit_call
+                    line_start = source.rfind("\n", 0, start_ptr) + 1
                     end_marker = f"model_{v}.evaluate(test_loader)"
                     end_ptr = source.find(end_marker, start_ptr)
                     if start_ptr != -1 and end_ptr != -1:
-                        end_ptr += len(end_marker)
+                        # Grab all text line_start to end_ptr + end_marker len
+                        end_idx = end_ptr + len(end_marker)
+                        old_block = source[line_start:end_idx]
                         repl = f"train_model_vsc(model_{v}, {m_path}, train_loader, val_loader, 20, '+ {v}', all_histories)"
-                        source = source[:start_ptr] + repl + source[end_ptr:]
-
-        # Handle single-model cells (22, 23, 32, 44)
+                        source = source.replace(old_block, repl)
         else:
-            # We search for .fit and .evaluate and replace the span
-            if ".fit(" in source:
-                fit_start = source.find(".fit(")
-                # Go back to start of line
-                line_start = source.rfind("\n", 0, fit_start) + 1
+            # Generalized single model replacement
+            fit_starts = [m.start() for m in re.finditer(r'\w+\.fit\(', source)]
+            for fit_start in reversed(fit_starts):
+                line_start = source.rfind('\n', 0, fit_start)
+                line_start = 0 if line_start == -1 else line_start + 1
                 
-                # Find ending mark (usually evaluate or end of cell)
-                eval_mark = ".evaluate("
-                eval_idx = source.find(eval_mark, fit_start)
-                
+                eval_idx = source.find('.evaluate(', fit_start)
                 if eval_idx != -1:
-                    line_end = source.find(")", eval_idx) + 1
+                    line_end = source.find(')', eval_idx) + 1
                 else:
                     line_end = len(source)
-
-                # Capture leading whitespace for indentation
-                line_text = source[line_start:line_end]
-                indent = line_text[:len(line_text) - len(line_text.lstrip())]
                 
-                # Determine model name and model path
-                model_match = re.search(r"(\w+)\.fit\(", source)
-                m_var = model_match.group(1) if model_match else "model"
+                old_block = source[line_start:line_end]
+                indent = old_block[:len(old_block) - len(old_block.lstrip())]
                 
-                path_match = re.search(r"(_os\.path\.join\(_OUTPUT_DIR, '[^']+\.keras'\))", source)
+                model_match = re.search(r'(\w+)\.fit\(', old_block)
+                m_var = model_match.group(1) if model_match else 'model'
+                
+                path_match = re.search(r"(_os\.path\.join\(_OUTPUT_DIR, '[^']+\.keras'\))", old_block)
                 m_path_code = path_match.group(1) if path_match else "None"
                 
-                # Determine history key
-                key_match = re.search(r"all_histories\[([^\]]+)\]", source)
-                # If not found, use a fallback for loop models
+                # key extraction
+                key_match = re.search(r"all_histories\[([^\]]+)\]", old_block)
                 if key_match:
                     h_key_code = key_match.group(1)
-                elif 'name' in source and 'dropout' in source:
-                    h_key_code = 'name' # used in Model 2 loop
+                elif 'name' in old_block:
+                    h_key_code = 'name'
                 else:
-                    h_key_code = f"'{m_var}'" # fallback
+                    h_key_code = f"'{m_var}'"
                 
-                repl = f"{indent}train_model_vsc({m_var}, {m_path_code}, train_loader, val_loader, 20, {h_key_code}, all_histories)"
-                source = source[:line_start] + repl + source[line_end:]
+                # Check for dropout loops (e.g. model v2 experimental loops)
+                epochs_match = re.search(r'epochs\s*=\s*(\d+|epochs)', old_block)
+                ep_val = epochs_match.group(1) if epochs_match else '20'
+                
+                repl = f"{indent}train_model_vsc({m_var}, {m_path_code}, train_loader, val_loader, {ep_val}, {h_key_code}, all_histories)"
+                source = source.replace(old_block, repl)
 
-        # Prepend clear_gpu()
+    # Prepend/Append Clear GPU
+    if 'model.fit' in original or '.fit(' in original:
         if 'clear_gpu()' not in source:
             source = 'clear_gpu()\n' + source
-        
-        # Append manual cleanup
         cleanup = "\nimport gc, torch\nfor _ in range(3): gc.collect(); torch.cuda.empty_cache()\nclear_gpu()\nimport sys; sys.stdout.flush()\n"
         if cleanup.strip() not in source:
             source += cleanup
 
-    # Clear old outputs
     cell['outputs'] = []
     cell['execution_count'] = None
 
@@ -245,7 +229,6 @@ for i, cell in enumerate(vsc_nb['cells']):
             cell['source'][-1] = cell['source'][-1].rstrip('\n')
         modified_count += 1
 
-# Final Summary Cell
 final_cell = {
     "cell_type": "code",
     "execution_count": None,
@@ -265,8 +248,6 @@ final_cell = {
 }
 vsc_nb['cells'].append(final_cell)
 
-# Add cell IDs to all cells
-import uuid
 for cell in vsc_nb['cells']:
     if 'id' not in cell:
         cell['id'] = str(uuid.uuid4())
