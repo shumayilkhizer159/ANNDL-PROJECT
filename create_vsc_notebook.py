@@ -143,6 +143,11 @@ for i, cell in enumerate(vsc_nb['cells']):
     # Fix the Xception constructor specifically so it doesn't crash on ImageNet check
     source = re.sub(r'(Xception\([\s\S]*?)(shape=\(3, 224, 224\))([\s\S]*?\))', r'\1input_shape=(224, 224, 3)\3', source)
     
+    # 3.5 Fix the Xception Head Data Pipeline Layout
+    # Xception fundamentally expects Channels_Last because we forced it in the constructor above, 
+    # but the Torch dataloader yields Channels_First (3, 224, 224) via the Input layer.
+    source = re.sub(r'(\s*x\s*=\s*)base\(inp,\s*training=False\)', r'\1keras.layers.Permute((2, 3, 1))(inp)\n\1base(x, training=False)\n\1keras.layers.Permute((3, 1, 2))(x)', source)
+    
     # 4. Remove ALL permute(1, 2, 0) manual channel swaps
     source = re.sub(r't\s*=\s*t\.permute\(1,\s*2,\s*0\).*', '# permute removed for Torch channels-first backend', source)
     # =========================================================================
