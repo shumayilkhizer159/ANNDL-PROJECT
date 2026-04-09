@@ -143,7 +143,8 @@ for i, cell in enumerate(vsc_nb['cells']):
     # 3.5 Fix the Xception Head Data Pipeline Layout
     # Xception fundamentally expects Channels_Last because we forced it in the constructor above, 
     # but the Torch dataloader yields Channels_First (3, 224, 224) via the Input layer.
-    source = re.sub(r'(\s*x\s*=\s*)base\(inp,\s*training=False\)', r'\1keras.layers.Permute((2, 3, 1))(inp)\n\1base(x, training=False)\n\1keras.layers.Permute((3, 1, 2))(x)', source)
+    # We Permute BEFORE Xception, but NOT linearly after, because Keras defaults to channels_last for GlobalAvgPooling2D!
+    source = re.sub(r'(\s*x\s*=\s*)base\(inp,\s*training=False\)', r'\1keras.layers.Permute((2, 3, 1))(inp)\n\1base(x, training=False)', source)
     
     # 4. Remove ALL permute(1, 2, 0) manual channel swaps
     source = re.sub(r't\s*=\s*t\.permute\(1,\s*2,\s*0\).*', '# permute removed for Torch channels-first backend', source)
