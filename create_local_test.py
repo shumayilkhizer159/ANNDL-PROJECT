@@ -5,7 +5,7 @@ import uuid
 
 # Load the original notebook
 original_nb_path = 'ANNDL2526_Project_Template.ipynb'
-vsc_nb_path = 'ANNDL2526_Project_Template_vsc.ipynb'
+vsc_nb_path = 'ANNDL2526_Project_Template_LOCAL_TEST.ipynb'
 
 with open(original_nb_path, 'r', encoding='utf-8') as f:
     vsc_nb = json.load(f)
@@ -35,10 +35,32 @@ import os as _os
 _global_start = _time.time()
 
 # Setup Scratch Output Directory to avoid Disk Quota issues
-_SCRATCH_DIR = _os.environ.get('VSC_SCRATCH', _os.path.expanduser('~'))
-_OUTPUT_DIR = _os.path.join(_SCRATCH_DIR, 'anndl_models')
+_SCRATCH_DIR = _os.path.join(_os.getcwd(), 'local_test_output')
+_OUTPUT_DIR = _SCRATCH_DIR
 _os.makedirs(_OUTPUT_DIR, exist_ok=True)
-print(f"  📂 Saving models to: {_OUTPUT_DIR}")
+print(f"  📂 Saving mock models locally to: {_OUTPUT_DIR}")
+
+import keras
+print("⚠️ LOCAL DRY RUN MODE ACTIVATED ⚠️")
+print("=> Overriding Keras Model.fit() to only process 1 batch and 1 epoch!")
+
+if not hasattr(keras.Model, '_original_fit'):
+    keras.Model._original_fit = keras.Model.fit
+def fast_dry_fit(self, *args, **kwargs):
+    kwargs['steps_per_epoch'] = 1
+    if 'validation_data' in kwargs:
+         kwargs['validation_steps'] = 1
+    kwargs['epochs'] = 1
+    return keras.Model._original_fit(self, *args, **kwargs)
+keras.Model.fit = fast_dry_fit
+
+if not hasattr(keras.Model, '_original_evaluate'):
+    keras.Model._original_evaluate = keras.Model.evaluate
+def fast_dry_evaluate(self, *args, **kwargs):
+    kwargs['steps'] = 1
+    return keras.Model._original_evaluate(self, *args, **kwargs)
+keras.Model.evaluate = fast_dry_evaluate
+
 
 def _cell_timer(cell_num):
     elapsed = _time.time() - _global_start
@@ -107,10 +129,10 @@ for i, cell in enumerate(vsc_nb['cells']):
     if 'import matplotlib.pyplot as plt' in source:
         source = source.replace('import matplotlib.pyplot as plt', 'import matplotlib\nmatplotlib.use("Agg")\nimport matplotlib.pyplot as plt')
 
-    # Path Normalization
-    source = re.sub(r"input_dir\s*=\s*['\"].*?['\"]", f"input_dir = {vsc_data_base_code}", source)
-    source = re.sub(r"path_to_extracted_folder\s*=\s*['\"].*?['\"]", f"path_to_extracted_folder = {vsc_data_base_code}", source)
-    source = re.sub(r"['\"][A-Z]:/.*?/VOCdevkit/VOC2012['\"]", f"f\"{{{vsc_data_base_code}}}/VOCdevkit/VOC2012\"", source)
+    # Leave local paths alone for local test!
+    # source = re.sub(r"input_dir\s*=\s*['\"].*?['\"]", f"input_dir = {vsc_data_base_code}", source)
+    # source = re.sub(r"path_to_extracted_folder\s*=\s*['\"].*?['\"]", f"path_to_extracted_folder = {vsc_data_base_code}", source)
+    # source = re.sub(r"['\"][A-Z]:/.*?/VOCdevkit/VOC2012['\"]", f"f\"{{{vsc_data_base_code}}}/VOCdevkit/VOC2012\"", source)
     
     # =========================================================================
     # UNIVERSAL SHAPE & CHANNEL NORMALIZATION
