@@ -218,7 +218,13 @@ for i, cell in enumerate(vsc_nb['cells']):
                 epochs_match = re.search(r'epochs\s*=\s*(\d+|epochs)', old_block)
                 ep_val = epochs_match.group(1) if epochs_match else '20'
                 
-                repl = f"{indent}train_model_vsc({m_var}, {m_path_code}, train_loader, val_loader, {ep_val}, {h_key_code}, all_histories)"
+                # Dynamically extract dataloader variable names so we don't accidentally pass Classification data to U-Net
+                t_match = re.search(r'\.fit\(\s*([\w_]+)\s*,', old_block)
+                v_match = re.search(r'validation_data\s*=\s*([\w_]+)', old_block)
+                t_loader = t_match.group(1) if t_match else 'train_loader'
+                v_loader = v_match.group(1) if v_match else 'val_loader'
+                
+                repl = f"{indent}train_model_vsc({m_var}, {m_path_code}, {t_loader}, {v_loader}, {ep_val}, {h_key_code}, all_histories)"
                 source = source.replace(old_block, repl)
 
     # Append cleanup
