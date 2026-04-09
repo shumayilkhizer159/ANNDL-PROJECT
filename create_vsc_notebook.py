@@ -103,9 +103,8 @@ for i, cell in enumerate(vsc_nb['cells']):
     source = ''.join(cell.get('source', []))
     original = source
 
-    # Inject Timer + Agg Backend
-    if 'os.environ["KERAS_BACKEND"]' in source and 'import torch' in source:
-        source = timer_code + source
+    # Remove the early timer_code injection, we will do it at the very end of processing
+    if 'import matplotlib.pyplot as plt' in source:
         source = source.replace('import matplotlib.pyplot as plt', 'import matplotlib\nmatplotlib.use("Agg")\nimport matplotlib.pyplot as plt')
 
     # Path Normalization
@@ -221,13 +220,17 @@ for i, cell in enumerate(vsc_nb['cells']):
                 repl = f"{indent}train_model_vsc({m_var}, {m_path_code}, train_loader, val_loader, {ep_val}, {h_key_code}, all_histories)"
                 source = source.replace(old_block, repl)
 
-    # Prepend/Append Clear GPU
+    # Append cleanup
     if 'model.fit' in original or '.fit(' in original:
         if 'clear_gpu()' not in source:
             source = 'clear_gpu()\n' + source
         cleanup = "\nimport gc, torch\nfor _ in range(3): gc.collect(); torch.cuda.empty_cache()\nclear_gpu()\nimport sys; sys.stdout.flush()\n"
         if cleanup.strip() not in source:
             source += cleanup
+            
+    # CRITICAL FIX: Inject timer_code strictly AFTER all replacements to avoid infinite recursion
+    if 'os.environ["KERAS_BACKEND"]' in original and 'import torch' in original:
+        source = timer_code + source
 
     cell['outputs'] = []
     cell['execution_count'] = None
