@@ -61,12 +61,12 @@ def clear_gpu():
     import sys; sys.stdout.flush()
 
 def save_history(all_histories):
-    with open(_HISTORY_FILE, 'w') as f:
+    with open(_HISTORY_FILE, 'w', encoding='utf-8') as f:
         _json.dump(all_histories, f)
 
 def load_history():
     if _os.path.exists(_HISTORY_FILE):
-        with open(_HISTORY_FILE, 'r') as f:
+        with open(_HISTORY_FILE, 'r', encoding='utf-8') as f:
             try:
                 return _json.load(f)
             except:
@@ -75,15 +75,21 @@ def load_history():
 
 def train_model_vsc(model, model_path, train_loader, val_loader, epochs, history_key, all_histories):
     if model_path is None:
-        # Synthesize a unique safe name from the history_key (e.g. 'Xc-A1' -> 'xc_a1_auto.keras')
         safe_name = "".join([c if c.isalnum() else "_" for c in str(history_key)]).lower().strip("_")
         model_path = _os.path.join(_OUTPUT_DIR, f"{safe_name or 'model'}_auto.keras")
 
     if _os.path.exists(model_path):
-        print(f"✅ Skipping training: {model_path} already exists...")
+        print(f"[OK] Skipping training: {model_path} already exists...")
         model.load_weights(model_path)
+        
+        # Ensure history is available even if skipped
+        if history_key not in all_histories:
+            loaded = load_history()
+            if history_key in loaded:
+                all_histories[history_key] = loaded[history_key]
+                print(f"      Loaded history for '{history_key}' from file.")
     else:
-        print(f"🚀 Training '{history_key}'...")
+        print(f"[RUN] Training '{history_key}'...")
         cb = make_callbacks(model_path) 
         hist = model.fit(train_loader, validation_data=val_loader, epochs=epochs, callbacks=cb)
         all_histories[history_key] = hist.history
@@ -91,10 +97,24 @@ def train_model_vsc(model, model_path, train_loader, val_loader, epochs, history
     
     # Check shape to guarantee no runtime crash on evaluate
     dummy_x, _ = next(iter(val_loader))
-    print(f"      [Sanity Check] DataLoader shape: {dummy_x.shape}, Expected: {model.input_shape}")
+    print(f"      [Sanity Check] DataLoader shape: {dummy_x.shape}")
     
-    print(f"📊 Evaluating '{history_key}'...")
-    model.evaluate(val_loader)
+    print(f"[EVAL] Evaluating '{history_key}'...")
+    eval_res = model.evaluate(val_loader, verbose=0)
+    
+    # NEW: Handle case where model has only 1 metric (eval_res is a float, not a list)
+    if not isinstance(eval_res, (list, tuple)):
+        eval_res = [eval_res]
+
+    # If history is STILL missing (e.g. first run didn't save it), create a single-point history from evaluation
+    if history_key not in all_histories:
+        metrics = model.metrics_names
+        all_histories[history_key] = {m: [val] for m, val in zip(metrics, eval_res)}
+        for m, val in zip(metrics, eval_res):
+            all_histories[history_key][f'val_{m}'] = [val]
+        save_history(all_histories)
+        print(f"      Created summary history for '{history_key}' from evaluation.")
+
 """
 
 modified_count = 0
@@ -224,6 +244,28 @@ for i, cell in enumerate(vsc_nb['cells']):
             repl = f"{indent}train_model_vsc({m_var}, {m_path_code}, {t_loader}, {v_loader}, {ep_val}, {h_key_code}, all_histories)"
             source = source.replace(old_block, repl)
 
+    # Robust Plotting Helper (Cell 20 and others)
+    if 'axes[0].plot' in source and 'axes[1].plot' in source:
+        robust_plot = """
+for label, hist in all_histories.items():
+    # Plot Loss
+    l_key = next((k for k in hist.keys() if 'val_loss' in k), 'loss' if 'loss' in hist else None)
+    if l_key and l_key in hist: axes[0].plot(hist[l_key], label=label, marker='o', markersize=4)
+    
+    # Plot AUC/Accuracy/Score (Dice, etc)
+    a_key = next((k for k in hist.keys() if any(x in k for x in ['val_auc', 'val_acc', 'val_dice', 'val_compile'])), None)
+    if a_key and a_key in hist: axes[1].plot(hist[a_key], label=label, marker='o', markersize=4)
+
+axes[0].set(title='Model Progress (Loss)', xlabel='Epoch', ylabel='Value'); axes[0].legend()
+axes[1].set(title='Model Progress (Metrics)', xlabel='Epoch', ylabel='Score'); axes[1].legend()
+"""
+        # Find the block from for loop to the end of legends
+        p_start = source.find('for ')
+        p_end = source.find('axes[1].legend()') + 16
+        if p_start != -1 and p_end > p_start:
+            source = source[:p_start] + robust_plot + source[p_end:]
+
+
     # Append cleanup
     if 'model.fit' in original or '.fit(' in original:
         if 'clear_gpu()' not in source:
@@ -235,6 +277,19 @@ for i, cell in enumerate(vsc_nb['cells']):
     # CRITICAL FIX: Inject timer_code strictly AFTER all replacements to avoid infinite recursion
     if 'os.environ["KERAS_BACKEND"]' in original and 'import torch' in original:
         source = timer_code + source
+
+    # Suppression and Environment (Cell 0/1)
+    if 'import os' in original and 'import numpy' in original:
+        suppression = """
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', message='.*expandable_segments.*')
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+"""
+        if 'warnings.filterwarnings' not in source:
+            # Leave 'import os' alone, just append suppression
+            source = source + suppression
 
     cell['outputs'] = []
     cell['execution_count'] = None
