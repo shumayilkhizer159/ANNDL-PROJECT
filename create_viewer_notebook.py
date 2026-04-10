@@ -5,7 +5,7 @@ import uuid
 
 # Load the original notebook
 original_nb_path = 'ANNDL2526_Project_Template.ipynb'
-vsc_nb_path = 'ANNDL2526_Project_Template_vsc.ipynb'
+vsc_nb_path = 'ANNDL2526_Project_Template_VIEWER.ipynb'
 
 with open(original_nb_path, 'r', encoding='utf-8') as f:
     vsc_nb = json.load(f)
@@ -34,11 +34,10 @@ timer_code = """import time as _time
 import os as _os
 _global_start = _time.time()
 
-# Setup Scratch Output Directory to avoid Disk Quota issues
-_SCRATCH_DIR = _os.environ.get('VSC_SCRATCH', _os.path.expanduser('~'))
-_OUTPUT_DIR = _os.path.join(_SCRATCH_DIR, 'anndl_models')
+# Setup Local Models Directory 
+_OUTPUT_DIR = _os.path.join(_os.getcwd(), 'anndl_models')
 _os.makedirs(_OUTPUT_DIR, exist_ok=True)
-print(f"  📂 Saving models to: {_OUTPUT_DIR}")
+print(f"  📂 Loading pre-trained models from: {_OUTPUT_DIR}")
 
 def _cell_timer(cell_num):
     elapsed = _time.time() - _global_start
@@ -52,6 +51,7 @@ import torch as _torch
 import json as _json
 
 _HISTORY_FILE = _os.path.join(_OUTPUT_DIR, 'history.json')
+
 
 def clear_gpu():
     _gc.collect()
@@ -107,14 +107,14 @@ for i, cell in enumerate(vsc_nb['cells']):
     source = ''.join(cell.get('source', []))
     original = source
 
-    # Remove the early timer_code injection, we will do it at the very end of processing
+    # Removed matplotlib Agg constraint to allow local viewing inline
     if 'import matplotlib.pyplot as plt' in source:
-        source = source.replace('import matplotlib.pyplot as plt', 'import matplotlib\nmatplotlib.use("Agg")\nimport matplotlib.pyplot as plt')
+        pass
 
-    # Path Normalization
-    source = re.sub(r"input_dir\s*=\s*['\"].*?['\"]", f"input_dir = {vsc_data_base_code}", source)
-    source = re.sub(r"path_to_extracted_folder\s*=\s*['\"].*?['\"]", f"path_to_extracted_folder = {vsc_data_base_code}", source)
-    source = re.sub(r"['\"][A-Z]:/.*?/VOCdevkit/VOC2012['\"]", f"f\"{{{vsc_data_base_code}}}/VOCdevkit/VOC2012\"", source)
+    # Leave local paths alone for local test!
+    # source = re.sub(r"input_dir\s*=\s*['\"].*?['\"]", f"input_dir = {vsc_data_base_code}", source)
+    # source = re.sub(r"path_to_extracted_folder\s*=\s*['\"].*?['\"]", f"path_to_extracted_folder = {vsc_data_base_code}", source)
+    # source = re.sub(r"['\"][A-Z]:/.*?/VOCdevkit/VOC2012['\"]", f"f\"{{{vsc_data_base_code}}}/VOCdevkit/VOC2012\"", source)
     
     # =========================================================================
     # UNIVERSAL SHAPE & CHANNEL NORMALIZATION
